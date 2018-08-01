@@ -1,0 +1,130 @@
+<?xml version="1.0" encoding="utf-8"?>
+<android.support.constraint.ConstraintLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:layout_marginLeft="20dp"
+    android:layout_marginTop="20dp"
+    tools:context=".ConnectionActivity">
+
+    <LinearLayout
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        tools:context=".ConnectionActivity">
+
+        <RelativeLayout
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="10dp"
+            tools:context=".ConnectionActivity">
+
+            <Button
+                android:id="@+id/connect"
+                android:layout_width="120dp"
+                android:layout_height="wrap_content"
+                android:text="Connect"
+                />
+
+            <TextView
+                android:id="@+id/scanData"
+                android:layout_width="150dp"
+                android:layout_height="30dp"
+                android:layout_marginTop="10dp"
+                android:layout_marginLeft="10dp"
+                android:gravity="center"
+                android:background="@drawable/textframe"
+                android:layout_toRightOf="@+id/connect"
+                />
+
+            <ImageView
+                android:id="@+id/connectStatus"
+                android:layout_width="30dp"
+                android:layout_height="30dp"
+                android:layout_marginTop="10dp"
+                android:layout_marginLeft="10dp"
+                android:gravity="center"
+                android:layout_toRightOf="@+id/scanData"
+                android:background="@android:color/holo_blue_light"
+                />
+        </RelativeLayout>
+
+    <RelativeLayout
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="10dp"
+        tools:context=".ConnectionActivity">
+
+        <Button
+            android:id="@+id/read"
+            android:layout_width="120dp"
+            android:layout_height="wrap_content"
+            android:text="Read"
+            />
+
+        <TextView
+            android:id="@+id/readData"
+            android:layout_width="50dp"
+            android:layout_height="30dp"
+            android:layout_marginTop="10dp"
+            android:layout_marginLeft="10dp"
+            android:gravity="center"
+            android:background="@drawable/textframe"
+            android:layout_toRightOf="@+id/read"
+            />
+    </RelativeLayout>
+
+        <RelativeLayout
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="10dp"
+            tools:context=".ConnectionActivity">
+
+            <Button
+                android:id="@+id/calibrate"
+                android:layout_width="120dp"
+                android:layout_height="wrap_content"
+                android:text="Calibrate"
+                />
+
+            <TextView
+                android:id="@+id/calibrateData"
+                android:layout_width="50dp"
+                android:layout_height="30dp"
+                android:layout_marginTop="10dp"
+                android:layout_marginLeft="10dp"
+                android:gravity="center"
+                android:background="@drawable/textframe"
+                android:layout_toRightOf="@+id/calibrate"
+                />
+
+        </RelativeLayout>
+
+        <RelativeLayout
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="10dp"
+            tools:context=".ConnectionActivity">
+
+            <Button
+                android:id="@+id/sensor"
+                android:layout_width="120dp"
+                android:layout_height="wrap_content"
+                android:text="Sensor"
+                />
+
+            <TextView
+                android:id="@+id/sensorData"
+                android:layout_width="50dp"
+                android:layout_height="30dp"
+                android:layout_marginTop="10dp"
+                android:layout_marginLeft="10dp"
+                android:gravity="center"
+                android:background="@drawable/textframe"
+                android:layout_toRightOf="@+id/sensor"
+                />
+
+        </RelativeLayout>
+    </LinearLayout>
+</android.support.constraint.ConstraintLayout>
