@@ -14,6 +14,7 @@ import com.polidea.rxandroidble2.RxBleDevice;
 import com.polidea.rxandroidble2.scan.ScanFilter;
 import com.polidea.rxandroidble2.scan.ScanResult;
 import com.polidea.rxandroidble2.scan.ScanSettings;
+import com.upright.goble.events.URGCalibEvent;
 import com.upright.goble.events.URGConnEvent;
 import com.upright.goble.events.URGEventBus;
 import com.upright.goble.events.URGReadEvent;
@@ -53,24 +54,24 @@ public class URGConnection {
     //UUID SENSOR_CHARACTERISTIC_UUID = UUID.fromString("0000aad1-0000-1000-8000-00805f9b34fb");
     UUID SENSOR_CHARACTERISTIC_UUID = UUID.fromString("0000aaca-0000-1000-8000-00805f9b34fb");
     UUID CALIB_CHARACTERISTIC_UUID = UUID.fromString("0000aab3-0000-1000-8000-00805f9b34fb");
+    UUID CALIB_ACK_UUID = UUID.fromString("0000aab2-0000-1000-8000-00805f9b34fb");
 
     //int                         mAngleData;
-    int                         mStraightAngle;
-    int                         mSlouchAngle;
-    int                         mStraightRatio = 5;
-    int                         mSlouchRatio = 5;
+    int mStraightAngle;
+    int mSlouchAngle;
+    int mStraightRatio = 5;
+    int mSlouchRatio = 5;
 
-    static int                  numberOfStraightFrames = 40;
-    int                         numberOfSlouchFrames =10;
-    static int                  lastStraightAcc;
-    static int                  lastSlouchAcc;
+    static int numberOfStraightFrames = 40;
+    int numberOfSlouchFrames = 10;
+    static int lastStraightAcc;
+    static int lastSlouchAcc;
 
     private static final String DEVICE_SEARCH_STRING = "upright";
     Hashtable<BluetoothDevice, Integer> bleDevices = new Hashtable<BluetoothDevice, Integer>();
 
     public URGConnection(Context context) {
         rxBleClient = RxBleClient.create(context);
-        //bleDevice = rxBleClient.getBleDevice(macAddress);
         eventBus = URGEventBus.bus();
         setScanTimer();
         setAutoConnectTimer(true);
@@ -78,11 +79,12 @@ public class URGConnection {
 
     private void setAutoConnectTimer(boolean enable) {
         Logger.log("setAutoConnectTimer: " + enable);
+        if(connectionAttemptsTimer != null)
+                connectionAttemptsTimer.cancel();
 
         if (enable) {
             connectionAttemptsTimer = new CountDownTimer(6000000, 2000) {
                 public void onTick(long millisUntilFinished) {
-                    Logger.log("checking auto connect...");
                     if (isConnected())
                         Logger.log("device already connected");
                     else if (bleDevice != null && bleDevice.getMacAddress().length() > 0) {
@@ -124,6 +126,8 @@ public class URGConnection {
     private <RxBleConnectionState> void onConnectionStateChange(RxBleConnection.RxBleConnectionState state) {
         Logger.log("onConnectionStateChange: " + state.toString());
         eventBus.send(new URGConnEvent(state));
+        if(state == RxBleConnection.RxBleConnectionState.DISCONNECTED )
+            setAutoConnectTimer(true);
     }
 
     public void bleConnect() {
@@ -141,6 +145,7 @@ public class URGConnection {
                     .subscribe(
                             characteristic -> {
                                 Log.i(getClass().getSimpleName(), "connection established");
+                                registerCalibrationDoneNotification();
                             },
                             this::onConnectionFailure,
                             this::onConnectionFinished
@@ -151,7 +156,7 @@ public class URGConnection {
     private void onConnectionFailure(Throwable throwable) {
     }
 
-    public void read() {
+    public void readCalibration() {
         if (isConnected()) {
             connectionObservable
                     .firstOrError()
@@ -159,6 +164,7 @@ public class URGConnection {
                     .observeOn(AndroidSchedulers.mainThread())
                     .subscribe(bytes -> {
                         readCalibrationAngles(bytes);
+                        registerSensorNotifications();
                     }, this::onReadFailure);
         }
     }
@@ -177,7 +183,7 @@ public class URGConnection {
         }
     }
 
-    public void sensor() {
+    public void registerSensorNotifications() {
         if (isConnected()) {
             connectionObservable
                     .flatMap(rxBleConnection -> rxBleConnection.setupNotification(SENSOR_CHARACTERISTIC_UUID))
@@ -185,6 +191,28 @@ public class URGConnection {
                     .flatMap(notificationObservable -> notificationObservable)
                     .observeOn(AndroidSchedulers.mainThread())
                     .subscribe(this::onSensorReceived, this::onNotificationSetupFailure);
+        }
+    }
+
+    public void registerCalibrationDoneNotification() {
+        if (isConnected()) {
+            connectionObservable
+                    .flatMap(rxBleConnection -> rxBleConnection.setupNotification(CALIB_ACK_UUID))
+                    .doOnNext(notificationObservable -> Logger.log("Setting up sensor notification..."))
+                    .flatMap(notificationObservable -> notificationObservable)
+                    .observeOn(AndroidSchedulers.mainThread())
+                    .subscribe(this::onCalibAckReceived, this::onNotificationSetupFailure);
+        }
+    }
+
+    private void onCalibAckReceived(byte[] bytes) {
+        Logger.log("onCalibAckReceived: " + BytesUtil.bytesToInt(bytes, 1));
+        int state = BytesUtil.bytesToInt(bytes, 1);
+
+        URGCalibEvent event = new URGCalibEvent(state);
+        eventBus.send(event);
+        if(event.getState() == URGCalibEvent.CALIB_FINISHED) {
+            readCalibration();
         }
     }
 
@@ -243,7 +271,6 @@ public class URGConnection {
 
     private void onConnectionFinished() {
         Logger.log("onConnectionFinished");
-        setAutoConnectTimer(true);
     }
 
     public URGEventBus bus() {
@@ -270,42 +297,36 @@ public class URGConnection {
             disconnectTriggerSubject.onNext(true);
     }
 
-//    private void onSensorReceived(byte[] bytes) {
-//        int angle = BytesUtil.bytesToInt(bytes, 1);
+    private void onSensorReceived(byte[] bytes) {
+        // try to read correctly from bytes instead of reading sensor value again..
 
-        private void onSensorReceived(byte[] bytes) {
-        //    int angle = BytesUtil.bytesToInt(bytes, 1);
-           //short angle = (short) ((bytes[1] << 8) | bytes[0]);
-            //short angle = ByteBuffer.wrap(bytes).order(ByteOrder.LITTLE_ENDIAN).getShort();
-           // int angle = unsignedShortToInt(bytes);
-        //    Log.i("vy2110", "angle: " + angle);
-       // Logger.log("onSensorReceived: " + angle);
-        //sendSensorDisplayAngle((int) angle);
-            readSensor();
-    }
-
-    private void readSensor() {
+//        int angle = BytesUtil.bytesToInt(bytes, 2);
+//        sendSensorDisplayAngle(angle);
         connectionObservable
                 .flatMapSingle(RxBleConnection::discoverServices)
                 .flatMapSingle(rxBleDeviceServices -> rxBleDeviceServices.getCharacteristic(SENSOR_CHARACTERISTIC_UUID))
                 .observeOn(AndroidSchedulers.mainThread())
-                .doOnSubscribe(disposable -> Logger.log("Connecting..."))
                 .subscribe(
                         characteristic -> {
                             onSensorReceivedChar(characteristic);
                         },
-                        this::onConnectionFailure,
-                        this::onConnectionFinished
+                        this::onReadSensorFailure,
+                        this::onReadSensorFinished
                 );
+    }
+
+    private void onReadSensorFinished() {
+    }
+
+    private void onReadSensorFailure(Throwable throwable) {
     }
 
     private void onSensorReceivedChar(BluetoothGattCharacteristic characteristic) {
         int angle = (characteristic.getIntValue(BluetoothGattCharacteristic.FORMAT_SINT16, 0));
-        //Log.i("vy2110", "char angle: " + angle);
         sendSensorDisplayAngle(angle);
     }
 
-    
+
     private void onNotificationSetupFailure(Throwable throwable) {
         Logger.log("onNotificationSetupFailure: " + throwable);
     }
@@ -349,7 +370,7 @@ public class URGConnection {
     }
 
     private void sendSensorDisplayAngle(int angle) {
-        mStraightAngle = 81;
+        // mStraightAngle = 81;
         if (angle < mSlouchAngle && ((angle - mStraightAngle) / mStraightRatio) <= numberOfStraightFrames) {
             int angelRange = (angle - mStraightAngle) / mStraightRatio;
             Log.i("vy2110", "straight: " + mStraightAngle + " : ration: " + mStraightRatio + " : angle: " + angle + " : sned: " + angelRange);
@@ -404,15 +425,6 @@ public class URGConnection {
 
         } else
             mSlouchRatio = 1;
-    }
-
-    public static final int unsignedShortToInt(byte[] b)
-    {
-        int i = 0;
-        i |= b[0] & 0xFF;
-        i <<= 8;
-        i |= b[1] & 0xFF;
-        return i;
     }
 }
 

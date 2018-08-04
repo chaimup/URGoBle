@@ -13,11 +13,10 @@ import android.widget.TextView;
 
 import com.trello.rxlifecycle2.components.support.RxAppCompatActivity;
 import com.upright.goble.connection.URGConnection;
+import com.upright.goble.events.URGCalibEvent;
 import com.upright.goble.events.URGConnEvent;
-import com.upright.goble.events.URGReadEvent;
 import com.upright.goble.events.URGScanEvent;
 import com.upright.goble.events.URGSensorEvent;
-import com.upright.goble.events.URGWriteEvent;
 import com.upright.goble.utils.Logger;
 
 import butterknife.BindView;
@@ -39,13 +38,10 @@ public class ConnectionActivity extends RxAppCompatActivity {
 
     URGConnection connection;
     @BindView(R.id.connect) Button connectButton;
-    @BindView(R.id.read) Button readButton;
     @BindView(R.id.calibrate) Button calibrateButton;
-    @BindView(R.id.sensor) Button sensorButton;
     @BindView(R.id.connectStatus) ImageView connectImage;
     @BindView(R.id.sensorMan) ImageView sensorMan;
     @BindView(R.id.sensorData) TextView sensorData;
-    @BindView(R.id.readData) TextView readData;
     @BindView(R.id.calibrateData) TextView calibrateData;
     @BindView(R.id.scanData) TextView scanData;
 
@@ -71,19 +67,9 @@ public class ConnectionActivity extends RxAppCompatActivity {
         enableBluetoothAndLocation();
     }
 
-    @OnClick(R.id.read)
-    public void onReadClick() {
-        connection.read();
-    }
-
     @OnClick(R.id.calibrate)
     public void onCalibrateClick() {
         connection.calibrate();
-    }
-
-    @OnClick(R.id.sensor)
-    public void onSensorClick() {
-        connection.sensor();
     }
 
     private void subscribeEvents() {
@@ -102,15 +88,25 @@ public class ConnectionActivity extends RxAppCompatActivity {
         if (event instanceof URGConnEvent) {
             handleConnectionUi(((URGConnEvent) event).getState());
             Logger.log("App: Connection Event Received: " + ((URGConnEvent) event).getState());
-        } else if (event instanceof URGReadEvent) {
-            handleReadUi(((URGReadEvent) event).getValue());
-        } else if (event instanceof URGWriteEvent) {
-            handleWriteUi();
         } else if (event instanceof URGSensorEvent) {
-            handleSensorUi(((URGSensorEvent) event).getIndexAngle(),((URGSensorEvent) event).getSensorAngle());
+            handleSensorUi(((URGSensorEvent) event).getIndexAngle(), ((URGSensorEvent) event).getSensorAngle());
+        } else if (event instanceof URGCalibEvent) {
+                handleCalibUi(((URGCalibEvent) event).getState());
         } else if (event instanceof URGScanEvent) {
             handleScanUi(((URGScanEvent) event).getMacAddress());
         }
+    }
+
+    private void handleCalibUi(int state) {
+        calibrateData.setText(state == URGCalibEvent.CALIB_FINISHED ? "ok" : (state == URGCalibEvent.CALIB_STARTED) ? "wait" : "error");
+        if(state == URGCalibEvent.CALIB_STARTED) {
+            resetSensorMan();
+        }
+    }
+
+    private void resetSensorMan() {
+        sensorMan.setImageResource(images_green[0]);
+        sensorData.setText("");
     }
 
     private void handleConnectionUi(URGConnEvent.State state) {
@@ -122,6 +118,7 @@ public class ConnectionActivity extends RxAppCompatActivity {
 
             case Disconnected:
                 connectImage.setBackgroundColor(ContextCompat.getColor(this, R.color.colorBlueLight));
+                resetSensorMan();
                 clearUiData();
                 enableDeviceButtons(false);
                 break;
@@ -130,45 +127,35 @@ public class ConnectionActivity extends RxAppCompatActivity {
         }
     }
 
-    private void handleReadUi(int value) {
-        readData.setText(Integer.toString(value));
-    }
-
-    private void handleWriteUi() {
-        calibrateData.setText("ok");
-    }
-
     private void handleScanUi(String address) {
         scanData.setText(address == null ? "GO not found" : address);
     }
 
-    Runnable update = new Runnable() {
-        @Override
-        public void run() {
-            sensorMan.setImageResource(images_green[indexAngle]);
-            sensorData.setText(Integer.toString(indexAngle));
-        }
 
-    };
 
     private void handleSensorUi(int indexAngle, int sensorAngle) {
+
+        Runnable update = new Runnable() {
+            @Override
+            public void run() {
+                sensorMan.setImageResource(images_green[indexAngle]);
+                sensorData.setText(Integer.toString(indexAngle));
+            }
+
+        };
+
         Logger.log("handleSensorUi: " + sensorAngle + " | " + indexAngle);
-        sensorMan.setImageResource(images_green[indexAngle]);
-        sensorData.setText(Integer.toString(indexAngle));
         runOnUiThread(update);
     }
 
     private void clearUiData() {
-         readData.setText("");
          calibrateData.setText("");
          sensorData.setText("");
     }
 
     private void enableDeviceButtons(boolean enable) {
         Logger.log("enable buttons: " + enable);
-        readButton.setEnabled(enable);
         calibrateButton.setEnabled(enable);
-        sensorButton.setEnabled(enable);
     }
 
     private void checkLocationPermission() {
