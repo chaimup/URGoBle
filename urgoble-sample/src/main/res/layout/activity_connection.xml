@@ -60,7 +60,7 @@
             android:id="@+id/read"
             android:layout_width="120dp"
             android:layout_height="wrap_content"
-            android:text="Read"
+            android:text="Read Calib"
             />
 
         <TextView
@@ -126,5 +126,14 @@
                 />
 
         </RelativeLayout>
+
+        <ImageView
+            android:id="@+id/sensorMan"
+            android:layout_width="150dp"
+            android:layout_height="150dp"
+            android:layout_centerHorizontal="true"
+            android:layout_centerVertical="true"
+            android:layout_marginBottom="5dp"
+            android:src="@drawable/green_avi1" />
     </LinearLayout>
 </android.support.constraint.ConstraintLayout>

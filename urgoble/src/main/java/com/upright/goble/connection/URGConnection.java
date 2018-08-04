@@ -2,6 +2,7 @@ package com.upright.goble.connection;
 
 import android.bluetooth.BluetoothAdapter;
 import android.bluetooth.BluetoothDevice;
+import android.bluetooth.BluetoothGattCharacteristic;
 import android.content.Context;
 import android.os.CountDownTimer;
 import android.util.Log;
@@ -22,6 +23,8 @@ import com.upright.goble.events.URGWriteEvent;
 import com.upright.goble.utils.BytesUtil;
 import com.upright.goble.utils.Logger;
 
+import java.nio.ByteBuffer;
+import java.nio.ByteOrder;
 import java.util.Hashtable;
 import java.util.Set;
 import java.util.UUID;
@@ -47,7 +50,21 @@ public class URGConnection {
     UUID CALIB_CMD_UUID = UUID.fromString("0000aab1-0000-1000-8000-00805f9b34fb");
     byte CALIB_COMMAND_STRAIGHT_CALIB_VALUE = 1;
     UUID SENSOR_SERVICE_UUID = UUID.fromString("0000aad0-0000-1000-8000-00805f9b34fb");
-    UUID SENSOR_CHARACTERISTIC_UUID = UUID.fromString("0000aad1-0000-1000-8000-00805f9b34fb");
+    //UUID SENSOR_CHARACTERISTIC_UUID = UUID.fromString("0000aad1-0000-1000-8000-00805f9b34fb");
+    UUID SENSOR_CHARACTERISTIC_UUID = UUID.fromString("0000aaca-0000-1000-8000-00805f9b34fb");
+    UUID CALIB_CHARACTERISTIC_UUID = UUID.fromString("0000aab3-0000-1000-8000-00805f9b34fb");
+
+    //int                         mAngleData;
+    int                         mStraightAngle;
+    int                         mSlouchAngle;
+    int                         mStraightRatio = 5;
+    int                         mSlouchRatio = 5;
+
+    static int                  numberOfStraightFrames = 40;
+    int                         numberOfSlouchFrames =10;
+    static int                  lastStraightAcc;
+    static int                  lastSlouchAcc;
+
     private static final String DEVICE_SEARCH_STRING = "upright";
     Hashtable<BluetoothDevice, Integer> bleDevices = new Hashtable<BluetoothDevice, Integer>();
 
@@ -62,7 +79,7 @@ public class URGConnection {
     private void setAutoConnectTimer(boolean enable) {
         Logger.log("setAutoConnectTimer: " + enable);
 
-        if(enable) {
+        if (enable) {
             connectionAttemptsTimer = new CountDownTimer(6000000, 2000) {
                 public void onTick(long millisUntilFinished) {
                     Logger.log("checking auto connect...");
@@ -78,7 +95,7 @@ public class URGConnection {
                 }
             }.start();
         } else {
-            if(connectionAttemptsTimer != null)
+            if (connectionAttemptsTimer != null)
                 connectionAttemptsTimer.cancel();
         }
     }
@@ -110,7 +127,7 @@ public class URGConnection {
     }
 
     public void bleConnect() {
-        if(!bluetoothEnabled())
+        if (!bluetoothEnabled())
             return;
 
         if (isConnected()) {
@@ -138,12 +155,10 @@ public class URGConnection {
         if (isConnected()) {
             connectionObservable
                     .firstOrError()
-                    .flatMap(rxBleConnection -> rxBleConnection.readCharacteristic(BATTERY_CHARACTERISTIC))
+                    .flatMap(rxBleConnection -> rxBleConnection.readCharacteristic(CALIB_CHARACTERISTIC_UUID))
                     .observeOn(AndroidSchedulers.mainThread())
                     .subscribe(bytes -> {
-                        int intValue = BytesUtil.bytesToInt(bytes, 1);
-                        eventBus.send(new URGReadEvent(intValue));
-                        Logger.log("characteristic read | bytes: " + " | hex: " + BytesUtil.bytesToHex(bytes) + " | int: " + intValue);
+                        readCalibrationAngles(bytes);
                     }, this::onReadFailure);
         }
     }
@@ -182,8 +197,8 @@ public class URGConnection {
         bleDevices.clear();
         scanDisposable = null;
         scanTimer.start();
-        if(scanDisposable != null)
-                scanDisposable.dispose();
+        if (scanDisposable != null)
+            scanDisposable.dispose();
 
         scanDisposable = rxBleClient.scanBleDevices(
                 new ScanSettings.Builder()
@@ -255,12 +270,42 @@ public class URGConnection {
             disconnectTriggerSubject.onNext(true);
     }
 
-    private void onSensorReceived(byte[] bytes) {
-        int value = BytesUtil.bytesToInt(bytes, 1);
-        eventBus.send(new URGSensorEvent(value));
-        Logger.log("onSensorReceived: " + value);
+//    private void onSensorReceived(byte[] bytes) {
+//        int angle = BytesUtil.bytesToInt(bytes, 1);
+
+        private void onSensorReceived(byte[] bytes) {
+        //    int angle = BytesUtil.bytesToInt(bytes, 1);
+           //short angle = (short) ((bytes[1] << 8) | bytes[0]);
+            //short angle = ByteBuffer.wrap(bytes).order(ByteOrder.LITTLE_ENDIAN).getShort();
+           // int angle = unsignedShortToInt(bytes);
+        //    Log.i("vy2110", "angle: " + angle);
+       // Logger.log("onSensorReceived: " + angle);
+        //sendSensorDisplayAngle((int) angle);
+            readSensor();
     }
 
+    private void readSensor() {
+        connectionObservable
+                .flatMapSingle(RxBleConnection::discoverServices)
+                .flatMapSingle(rxBleDeviceServices -> rxBleDeviceServices.getCharacteristic(SENSOR_CHARACTERISTIC_UUID))
+                .observeOn(AndroidSchedulers.mainThread())
+                .doOnSubscribe(disposable -> Logger.log("Connecting..."))
+                .subscribe(
+                        characteristic -> {
+                            onSensorReceivedChar(characteristic);
+                        },
+                        this::onConnectionFailure,
+                        this::onConnectionFinished
+                );
+    }
+
+    private void onSensorReceivedChar(BluetoothGattCharacteristic characteristic) {
+        int angle = (characteristic.getIntValue(BluetoothGattCharacteristic.FORMAT_SINT16, 0));
+        //Log.i("vy2110", "char angle: " + angle);
+        sendSensorDisplayAngle(angle);
+    }
+
+    
     private void onNotificationSetupFailure(Throwable throwable) {
         Logger.log("onNotificationSetupFailure: " + throwable);
     }
@@ -302,4 +347,72 @@ public class URGConnection {
         BluetoothAdapter btAdapter = BluetoothAdapter.getDefaultAdapter();
         return (btAdapter != null && btAdapter.isEnabled());
     }
+
+    private void sendSensorDisplayAngle(int angle) {
+        mStraightAngle = 81;
+        if (angle < mSlouchAngle && ((angle - mStraightAngle) / mStraightRatio) <= numberOfStraightFrames) {
+            int angelRange = (angle - mStraightAngle) / mStraightRatio;
+            Log.i("vy2110", "straight: " + mStraightAngle + " : ration: " + mStraightRatio + " : angle: " + angle + " : sned: " + angelRange);
+
+            int sedValue = (angelRange > 0 && angelRange < 50) ? angelRange : 0;
+            eventBus.send(new URGSensorEvent(sedValue, angle));
+        } else {
+            if (angle >= mSlouchAngle && angle < 900) {
+                int slouchFrame = numberOfStraightFrames + (angle - mSlouchAngle) / mSlouchRatio;
+                if (slouchFrame >= 50)
+                    slouchFrame = 49;
+                eventBus.send(new URGSensorEvent(slouchFrame, angle));
+            }
+        }
+    }
+
+    public void readCalibrationAngles(byte[] data) {
+
+        byte[] straightData = {data[0], data[1]};
+        byte[] slouchData = {data[2], data[3]};
+
+        mStraightAngle = (ByteBuffer.wrap(straightData).getShort());
+        mSlouchAngle = (ByteBuffer.wrap(slouchData).getShort());
+
+        Logger.log("mStraightAngle: " + lastStraightAcc + " | mSlouchAngle: " + mSlouchAngle);
+
+        lastStraightAcc = mStraightAngle / 10;
+        lastSlouchAcc = mSlouchAngle / 10;
+
+        int upperSlouchLimit = mStraightAngle + 500;
+
+        if (mSlouchAngle < upperSlouchLimit)
+            numberOfStraightFrames = 10 + (2) * (mSlouchAngle / 10 - mStraightAngle / 10);
+        else if (mSlouchAngle < 0) {
+            numberOfStraightFrames = numberOfStraightFrames;
+        }
+
+        if (numberOfStraightFrames >= 50)
+            numberOfStraightFrames = 40;
+
+        numberOfSlouchFrames = 50 - numberOfStraightFrames;
+
+        if (mSlouchAngle > 0 &&
+                mSlouchAngle - mStraightAngle > 0 &&
+                !((mSlouchAngle - mStraightAngle) / numberOfStraightFrames == 0)) {
+            mStraightRatio = (mSlouchAngle - mStraightAngle) / numberOfStraightFrames;
+        } else
+            mStraightRatio = 1;
+
+        if (mSlouchAngle < upperSlouchLimit && !((upperSlouchLimit - mSlouchAngle) / numberOfSlouchFrames == 0)) {
+            mSlouchRatio = (upperSlouchLimit - mSlouchAngle) / numberOfSlouchFrames;
+
+        } else
+            mSlouchRatio = 1;
+    }
+
+    public static final int unsignedShortToInt(byte[] b)
+    {
+        int i = 0;
+        i |= b[0] & 0xFF;
+        i <<= 8;
+        i |= b[1] & 0xFF;
+        return i;
+    }
 }
+
