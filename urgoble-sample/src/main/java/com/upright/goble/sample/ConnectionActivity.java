@@ -13,11 +13,10 @@ import android.widget.TextView;
 
 import com.trello.rxlifecycle2.components.support.RxAppCompatActivity;
 import com.upright.goble.connection.URGConnection;
+import com.upright.goble.events.URGCalibEvent;
 import com.upright.goble.events.URGConnEvent;
-import com.upright.goble.events.URGReadEvent;
 import com.upright.goble.events.URGScanEvent;
 import com.upright.goble.events.URGSensorEvent;
-import com.upright.goble.events.URGWriteEvent;
 import com.upright.goble.utils.Logger;
 
 import butterknife.BindView;
@@ -28,16 +27,21 @@ import io.reactivex.functions.Consumer;
 
 public class ConnectionActivity extends RxAppCompatActivity {
 
+    private Integer images_green[] = {R.drawable.green_avi1, R.drawable.green_avi2, R.drawable.green_avi3, R.drawable.green_avi4, R.drawable.green_avi5, R.drawable.green_avi6, R.drawable.green_avi7,
+            R.drawable.green_avi8, R.drawable.green_avi9, R.drawable.green_avi10, R.drawable.green_avi11, R.drawable.green_avi12, R.drawable.green_avi13, R.drawable.green_avi14, R.drawable.green_avi15, R.drawable.green_avi16,
+            R.drawable.green_avi17, R.drawable.green_avi18, R.drawable.green_avi19, R.drawable.green_avi20, R.drawable.green_avi21, R.drawable.green_avi22, R.drawable.green_avi23, R.drawable.green_avi24, R.drawable.green_avi25,
+            R.drawable.green_avi26, R.drawable.green_avi27, R.drawable.green_avi28, R.drawable.green_avi29, R.drawable.green_avi30, R.drawable.green_avi31, R.drawable.green_avi32, R.drawable.green_avi33, R.drawable.green_avi34,
+            R.drawable.green_avi35, R.drawable.green_avi36, R.drawable.green_avi37, R.drawable.green_avi38, R.drawable.green_avi39, R.drawable.green_avi40, R.drawable.green_avi41, R.drawable.green_avi42, R.drawable.green_avi43,
+            R.drawable.green_avi44, R.drawable.green_avi45, R.drawable.green_avi46, R.drawable.green_avi47, R.drawable.green_avi48, R.drawable.green_avi49, R.drawable.green_avi50};
+
     final static int BLUETOOTH_ENABLE_REQUEST_ID = 100;
 
     URGConnection connection;
     @BindView(R.id.connect) Button connectButton;
-    @BindView(R.id.read) Button readButton;
     @BindView(R.id.calibrate) Button calibrateButton;
-    @BindView(R.id.sensor) Button sensorButton;
     @BindView(R.id.connectStatus) ImageView connectImage;
+    @BindView(R.id.sensorMan) ImageView sensorMan;
     @BindView(R.id.sensorData) TextView sensorData;
-    @BindView(R.id.readData) TextView readData;
     @BindView(R.id.calibrateData) TextView calibrateData;
     @BindView(R.id.scanData) TextView scanData;
 
@@ -63,19 +67,9 @@ public class ConnectionActivity extends RxAppCompatActivity {
         enableBluetoothAndLocation();
     }
 
-    @OnClick(R.id.read)
-    public void onReadClick() {
-        connection.read();
-    }
-
     @OnClick(R.id.calibrate)
     public void onCalibrateClick() {
         connection.calibrate();
-    }
-
-    @OnClick(R.id.sensor)
-    public void onSensorClick() {
-        connection.sensor();
     }
 
     private void subscribeEvents() {
@@ -94,15 +88,25 @@ public class ConnectionActivity extends RxAppCompatActivity {
         if (event instanceof URGConnEvent) {
             handleConnectionUi(((URGConnEvent) event).getState());
             Logger.log("App: Connection Event Received: " + ((URGConnEvent) event).getState());
-        } else if (event instanceof URGReadEvent) {
-            handleReadUi(((URGReadEvent) event).getValue());
-        } else if (event instanceof URGWriteEvent) {
-            handleWriteUi();
         } else if (event instanceof URGSensorEvent) {
-            handleSensorUi(((URGSensorEvent) event).getAngle());
+            handleSensorUi(((URGSensorEvent) event).getIndexAngle(), ((URGSensorEvent) event).getSensorAngle());
+        } else if (event instanceof URGCalibEvent) {
+                handleCalibUi(((URGCalibEvent) event).getState());
         } else if (event instanceof URGScanEvent) {
             handleScanUi(((URGScanEvent) event).getMacAddress());
         }
+    }
+
+    private void handleCalibUi(int state) {
+        calibrateData.setText(state == URGCalibEvent.CALIB_FINISHED ? "ok" : (state == URGCalibEvent.CALIB_STARTED) ? "wait" : "error");
+        if(state == URGCalibEvent.CALIB_STARTED) {
+            resetSensorMan();
+        }
+    }
+
+    private void resetSensorMan() {
+        sensorMan.setImageResource(images_green[0]);
+        sensorData.setText("");
     }
 
     private void handleConnectionUi(URGConnEvent.State state) {
@@ -114,6 +118,7 @@ public class ConnectionActivity extends RxAppCompatActivity {
 
             case Disconnected:
                 connectImage.setBackgroundColor(ContextCompat.getColor(this, R.color.colorBlueLight));
+                resetSensorMan();
                 clearUiData();
                 enableDeviceButtons(false);
                 break;
@@ -122,34 +127,35 @@ public class ConnectionActivity extends RxAppCompatActivity {
         }
     }
 
-    private void handleReadUi(int value) {
-        readData.setText(Integer.toString(value));
-    }
-
-    private void handleWriteUi() {
-        calibrateData.setText("ok");
-    }
-
     private void handleScanUi(String address) {
         scanData.setText(address == null ? "GO not found" : address);
     }
 
-    private void handleSensorUi(int angle) {
 
-        sensorData.setText(Integer.toString(angle));
+
+    private void handleSensorUi(int indexAngle, int sensorAngle) {
+
+        Runnable update = new Runnable() {
+            @Override
+            public void run() {
+                sensorMan.setImageResource(images_green[indexAngle]);
+                sensorData.setText(Integer.toString(indexAngle));
+            }
+
+        };
+
+        Logger.log("handleSensorUi: " + sensorAngle + " | " + indexAngle);
+        runOnUiThread(update);
     }
 
     private void clearUiData() {
-         readData.setText("");
          calibrateData.setText("");
          sensorData.setText("");
     }
 
     private void enableDeviceButtons(boolean enable) {
         Logger.log("enable buttons: " + enable);
-        readButton.setEnabled(enable);
         calibrateButton.setEnabled(enable);
-        sensorButton.setEnabled(enable);
     }
 
     private void checkLocationPermission() {

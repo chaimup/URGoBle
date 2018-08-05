@@ -50,31 +50,6 @@
                 />
         </RelativeLayout>
 
-    <RelativeLayout
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_marginTop="10dp"
-        tools:context=".ConnectionActivity">
-
-        <Button
-            android:id="@+id/read"
-            android:layout_width="120dp"
-            android:layout_height="wrap_content"
-            android:text="Read"
-            />
-
-        <TextView
-            android:id="@+id/readData"
-            android:layout_width="50dp"
-            android:layout_height="30dp"
-            android:layout_marginTop="10dp"
-            android:layout_marginLeft="10dp"
-            android:gravity="center"
-            android:background="@drawable/textframe"
-            android:layout_toRightOf="@+id/read"
-            />
-    </RelativeLayout>
-
         <RelativeLayout
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
@@ -107,11 +82,13 @@
             android:layout_marginTop="10dp"
             tools:context=".ConnectionActivity">
 
-            <Button
+            <TextView
                 android:id="@+id/sensor"
                 android:layout_width="120dp"
                 android:layout_height="wrap_content"
-                android:text="Sensor"
+                android:gravity="center"
+                android:layout_marginTop="15dp"
+                android:text="Frame"
                 />
 
             <TextView
@@ -126,5 +103,14 @@
                 />
 
         </RelativeLayout>
+
+        <ImageView
+            android:id="@+id/sensorMan"
+            android:layout_width="150dp"
+            android:layout_height="150dp"
+            android:layout_centerHorizontal="true"
+            android:layout_centerVertical="true"
+            android:layout_marginBottom="5dp"
+            android:src="@drawable/green_avi1" />
     </LinearLayout>
 </android.support.constraint.ConstraintLayout>
