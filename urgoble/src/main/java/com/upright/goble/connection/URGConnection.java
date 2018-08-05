@@ -4,7 +4,7 @@ import android.bluetooth.BluetoothAdapter;
 import android.bluetooth.BluetoothDevice;
 import android.bluetooth.BluetoothGattCharacteristic;
 import android.content.Context;
-import android.os.CountDownTimer;
+import android.os.Handler;
 import android.util.Log;
 
 import com.jakewharton.rx.ReplayingShare;
@@ -17,7 +17,6 @@ import com.polidea.rxandroidble2.scan.ScanSettings;
 import com.upright.goble.events.URGCalibEvent;
 import com.upright.goble.events.URGConnEvent;
 import com.upright.goble.events.URGEventBus;
-import com.upright.goble.events.URGReadEvent;
 import com.upright.goble.events.URGScanEvent;
 import com.upright.goble.events.URGSensorEvent;
 import com.upright.goble.events.URGWriteEvent;
@@ -25,7 +24,6 @@ import com.upright.goble.utils.BytesUtil;
 import com.upright.goble.utils.Logger;
 
 import java.nio.ByteBuffer;
-import java.nio.ByteOrder;
 import java.util.Hashtable;
 import java.util.Set;
 import java.util.UUID;
@@ -43,20 +41,16 @@ public class URGConnection {
     private Observable<RxBleConnection> connectionObservable;
     private Disposable scanDisposable;
     private PublishSubject<Boolean> disconnectTriggerSubject = PublishSubject.create();
-    CountDownTimer scanTimer;
-    CountDownTimer connectionAttemptsTimer;
+    Handler handler = new Handler();
 
     // Demo/POC characteristics
     UUID BATTERY_CHARACTERISTIC = UUID.fromString("0000AAA1-0000-1000-8000-00805f9b34fb");
     UUID CALIB_CMD_UUID = UUID.fromString("0000aab1-0000-1000-8000-00805f9b34fb");
     byte CALIB_COMMAND_STRAIGHT_CALIB_VALUE = 1;
-    UUID SENSOR_SERVICE_UUID = UUID.fromString("0000aad0-0000-1000-8000-00805f9b34fb");
-    //UUID SENSOR_CHARACTERISTIC_UUID = UUID.fromString("0000aad1-0000-1000-8000-00805f9b34fb");
     UUID SENSOR_CHARACTERISTIC_UUID = UUID.fromString("0000aaca-0000-1000-8000-00805f9b34fb");
     UUID CALIB_CHARACTERISTIC_UUID = UUID.fromString("0000aab3-0000-1000-8000-00805f9b34fb");
     UUID CALIB_ACK_UUID = UUID.fromString("0000aab2-0000-1000-8000-00805f9b34fb");
 
-    //int                         mAngleData;
     int mStraightAngle;
     int mSlouchAngle;
     int mStraightRatio = 5;
@@ -73,61 +67,64 @@ public class URGConnection {
     public URGConnection(Context context) {
         rxBleClient = RxBleClient.create(context);
         eventBus = URGEventBus.bus();
+        startAutoConnect();
         setScanTimer();
-        setAutoConnectTimer(true);
     }
 
-    private void setAutoConnectTimer(boolean enable) {
-        Logger.log("setAutoConnectTimer: " + enable);
-        if(connectionAttemptsTimer != null)
-                connectionAttemptsTimer.cancel();
-
-        if (enable) {
-            connectionAttemptsTimer = new CountDownTimer(6000000, 2000) {
-                public void onTick(long millisUntilFinished) {
-                    if (isConnected())
-                        Logger.log("device already connected");
-                    else if (bleDevice != null && bleDevice.getMacAddress().length() > 0) {
-                        Logger.log("trying to auto connect...");
-                        bleConnect();
-                    }
-                }
-
-                public void onFinish() {
-                }
-            }.start();
-        } else {
-            if (connectionAttemptsTimer != null)
-                connectionAttemptsTimer.cancel();
-        }
-    }
-
-    private void setScanTimer() {
-        scanTimer = new CountDownTimer(3000, 1000) {
-
-            public void onTick(long millisUntilFinished) {
+    private Runnable scanTimerRunnable = new Runnable() {
+        @Override
+        public void run() {
+            Logger.log("scan finished");
+            if(scanDisposable != null)
+                    scanDisposable.dispose();
+            BluetoothDevice device = getClosestDevice();
+            if (device == null) {
+                eventBus.send(new URGScanEvent(null));
+            } else {
+                subscribeBleDevice(device.getAddress());
+                eventBus.send(new URGScanEvent(device.getAddress()));
+                bleConnect();
             }
+        }
+    };
 
-            public void onFinish() {
-                Logger.log("scan finished");
-                scanDisposable.dispose();
-                BluetoothDevice device = getClosestDevice();
-                if (device == null) {
-                    eventBus.send(new URGScanEvent(null));
-                } else {
-                    subscribeBleDevice(device.getAddress());
-                    eventBus.send(new URGScanEvent(device.getAddress()));
+    public void startAutoConnect() {
+        stopAutoConnect();
+        autoConnectRunnable.run();
+    }
+
+    private void stopAutoConnect() {
+        handler.removeCallbacks(autoConnectRunnable);
+    }
+
+    private Runnable autoConnectRunnable = new Runnable() {
+        @Override
+        public void run() {
+            try {
+                if (isConnected())
+                    Logger.log("auto connect:  already connected");
+                else if (bleDevice != null && bleDevice.getMacAddress().length() > 0) {
+                    Logger.log("auto connect: trying to connect...");
                     bleConnect();
                 }
+            } finally {
+                handler.postDelayed(autoConnectRunnable, 2000);
             }
-        };
+        }
+    };
+
+
+    private void setScanTimer() {
+        handler.postDelayed(scanTimerRunnable, 3000);
     }
 
     private <RxBleConnectionState> void onConnectionStateChange(RxBleConnection.RxBleConnectionState state) {
         Logger.log("onConnectionStateChange: " + state.toString());
         eventBus.send(new URGConnEvent(state));
         if(state == RxBleConnection.RxBleConnectionState.DISCONNECTED )
-            setAutoConnectTimer(true);
+            startAutoConnect();
+        else if(state == RxBleConnection.RxBleConnectionState.CONNECTED)
+            stopAutoConnect();
     }
 
     public void bleConnect() {
@@ -221,10 +218,10 @@ public class URGConnection {
             return;
 
         triggerDisconnect();
-        setAutoConnectTimer(false);
+        stopAutoConnect();
         bleDevices.clear();
         scanDisposable = null;
-        scanTimer.start();
+        setScanTimer();
         if (scanDisposable != null)
             scanDisposable.dispose();
 
@@ -325,7 +322,6 @@ public class URGConnection {
         int angle = (characteristic.getIntValue(BluetoothGattCharacteristic.FORMAT_SINT16, 0));
         sendSensorDisplayAngle(angle);
     }
-
 
     private void onNotificationSetupFailure(Throwable throwable) {
         Logger.log("onNotificationSetupFailure: " + throwable);
