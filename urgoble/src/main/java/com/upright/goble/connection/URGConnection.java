@@ -20,6 +20,7 @@ import com.upright.goble.events.URGEventBus;
 import com.upright.goble.events.URGScanEvent;
 import com.upright.goble.events.URGSensorEvent;
 import com.upright.goble.events.URGWriteEvent;
+import com.upright.goble.preferences.PrefManager;
 import com.upright.goble.utils.BytesUtil;
 import com.upright.goble.utils.Logger;
 
@@ -42,6 +43,7 @@ public class URGConnection {
     private Disposable scanDisposable;
     private PublishSubject<Boolean> disconnectTriggerSubject = PublishSubject.create();
     Handler handler = new Handler();
+    PrefManager prefManager;
 
     // Demo/POC characteristics
     UUID BATTERY_CHARACTERISTIC = UUID.fromString("0000AAA1-0000-1000-8000-00805f9b34fb");
@@ -67,6 +69,8 @@ public class URGConnection {
     public URGConnection(Context context) {
         rxBleClient = RxBleClient.create(context);
         eventBus = URGEventBus.bus();
+        prefManager = new PrefManager(context);
+
         startAutoConnect();
         setScanTimer();
     }
@@ -77,7 +81,7 @@ public class URGConnection {
             Logger.log("scan finished");
             if(scanDisposable != null)
                     scanDisposable.dispose();
-            BluetoothDevice device = getClosestDevice();
+            BluetoothDevice device = getScanDevice(prefManager.getMacAddress());
             if (device == null) {
                 eventBus.send(new URGScanEvent(null));
             } else {
@@ -121,10 +125,20 @@ public class URGConnection {
     private <RxBleConnectionState> void onConnectionStateChange(RxBleConnection.RxBleConnectionState state) {
         Logger.log("onConnectionStateChange: " + state.toString());
         eventBus.send(new URGConnEvent(state));
+
+        // Note: there are more state like CONNECTING/DISCONNECTING...
         if(state == RxBleConnection.RxBleConnectionState.DISCONNECTED )
             startAutoConnect();
-        else if(state == RxBleConnection.RxBleConnectionState.CONNECTED)
+        else if(state == RxBleConnection.RxBleConnectionState.CONNECTED) {
+            saveMacAddress();
             stopAutoConnect();
+        }
+    }
+
+    private void saveMacAddress() {
+        if(bleDevice != null && bleDevice.getMacAddress().length() > 0) {
+            prefManager.saveMacAddress(bleDevice.getMacAddress());
+        }
     }
 
     public void bleConnect() {
@@ -331,8 +345,8 @@ public class URGConnection {
         return scanDisposable != null;
     }
 
-    private BluetoothDevice getClosestDevice() {
-        Logger.log("looking for closest device...");
+    private BluetoothDevice getScanDevice(String address) {
+        Logger.log("getScanDevicee...");
         int maxRssi = Integer.MIN_VALUE;
         BluetoothDevice closestDevice = null;
 
@@ -340,14 +354,18 @@ public class URGConnection {
         for (BluetoothDevice device : devices) {
             Integer rssi = bleDevices.get(device);
             String name = device.getName();
-            if (rssi > maxRssi && name != null && name.toLowerCase().contains(DEVICE_SEARCH_STRING)) {
+
+            if(device.getAddress().equalsIgnoreCase(address)) {
+                Logger.log("getScanDevice: " + "existing device found: " + device.getAddress());
+                return device;
+            } else if (rssi > maxRssi && name != null && name.toLowerCase().contains(DEVICE_SEARCH_STRING)) {
                 maxRssi = rssi;
                 closestDevice = device;
             }
         }
 
         if (closestDevice != null)
-            Logger.log("closest device: " + closestDevice.getAddress());
+            Logger.log("closest device: " + (closestDevice != null ? closestDevice.getAddress() : "not found"));
 
         return closestDevice;
     }
@@ -366,7 +384,6 @@ public class URGConnection {
     }
 
     private void sendSensorDisplayAngle(int angle) {
-        // mStraightAngle = 81;
         if (angle < mSlouchAngle && ((angle - mStraightAngle) / mStraightRatio) <= numberOfStraightFrames) {
             int angelRange = (angle - mStraightAngle) / mStraightRatio;
             Log.i("vy2110", "straight: " + mStraightAngle + " : ration: " + mStraightRatio + " : angle: " + angle + " : sned: " + angelRange);

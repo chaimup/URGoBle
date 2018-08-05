@@ -1,3 +1,4 @@
 <resources>
     <string name="app_name">URGo2</string>
+    <string name="pref_mac_address">mac_address</string>
 </resources>

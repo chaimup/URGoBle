@@ -55,6 +55,12 @@ public class ConnectionActivity extends RxAppCompatActivity {
         subscribeEvents();
     }
 
+    @Override
+    public void onStart() {
+        super.onStart();
+        connection.scanAndConnect();
+    }
+
     @OnClick(R.id.connect)
     public void onConnectClick() {
         clearUiData();
