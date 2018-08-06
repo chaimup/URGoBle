@@ -37,6 +37,7 @@ public class ConnectionActivity extends RxAppCompatActivity {
     final static int BLUETOOTH_ENABLE_REQUEST_ID = 100;
 
     URGConnection connection;
+    @BindView(R.id.connectNew) Button connectNewButton;
     @BindView(R.id.connect) Button connectButton;
     @BindView(R.id.calibrate) Button calibrateButton;
     @BindView(R.id.connectStatus) ImageView connectImage;
@@ -44,6 +45,8 @@ public class ConnectionActivity extends RxAppCompatActivity {
     @BindView(R.id.sensorData) TextView sensorData;
     @BindView(R.id.calibrateData) TextView calibrateData;
     @BindView(R.id.scanData) TextView scanData;
+
+    boolean lookForNewDevice;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -58,13 +61,21 @@ public class ConnectionActivity extends RxAppCompatActivity {
     @Override
     public void onStart() {
         super.onStart();
-        connection.scanAndConnect();
+        connection.scanAndConnect(lookForNewDevice);
+    }
+
+    @OnClick(R.id.connectNew)
+    public void onConnectNewClick() {
+        lookForNewDevice = true;
+        clearUiData();
+        scanData.setText("Scanning...");
+        handleConnect();
     }
 
     @OnClick(R.id.connect)
     public void onConnectClick() {
+        lookForNewDevice = false;
         clearUiData();
-        scanData.setText("Scanning...");
         handleConnect();
     }
 
@@ -85,7 +96,12 @@ public class ConnectionActivity extends RxAppCompatActivity {
                 .subscribe(new Consumer<Object>() {
                     @Override
                     public void accept(Object event) throws Exception {
-                        handleEvent(event);
+                        runOnUiThread(new Runnable() {
+                            @Override
+                            public void run() {
+                                handleEvent(event);
+                            }
+                        });
                     }
                 });
     }
@@ -169,7 +185,7 @@ public class ConnectionActivity extends RxAppCompatActivity {
                 PackageManager.PERMISSION_GRANTED &&
                 ContextCompat.checkSelfPermission(this, android.Manifest.permission.ACCESS_COARSE_LOCATION) ==
                         PackageManager.PERMISSION_GRANTED) {
-            connection.scanAndConnect();
+            connection.scanAndConnect(lookForNewDevice);
         } else {
             ActivityCompat.requestPermissions(this, new String[]{Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION}, 1);
         }
@@ -180,7 +196,7 @@ public class ConnectionActivity extends RxAppCompatActivity {
         switch (permsRequestCode) {
             case 200:
                 //boolean locationAccepted = grantResults[0] == PackageManager.PERMISSION_GRANTED;
-                connection.scanAndConnect();
+                connection.scanAndConnect(lookForNewDevice);
                 break;
         }
     }

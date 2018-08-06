@@ -5,6 +5,8 @@ import android.bluetooth.BluetoothDevice;
 import android.bluetooth.BluetoothGattCharacteristic;
 import android.content.Context;
 import android.os.Handler;
+import android.os.HandlerThread;
+import android.os.Looper;
 import android.util.Log;
 
 import com.jakewharton.rx.ReplayingShare;
@@ -42,8 +44,12 @@ public class URGConnection {
     private Observable<RxBleConnection> connectionObservable;
     private Disposable scanDisposable;
     private PublishSubject<Boolean> disconnectTriggerSubject = PublishSubject.create();
-    Handler handler = new Handler();
+
+    HandlerThread handlerThread;
+    Handler handler;
     PrefManager prefManager;
+
+    boolean lookForNewDevice;
 
     // Demo/POC characteristics
     UUID BATTERY_CHARACTERISTIC = UUID.fromString("0000AAA1-0000-1000-8000-00805f9b34fb");
@@ -70,9 +76,18 @@ public class URGConnection {
         rxBleClient = RxBleClient.create(context);
         eventBus = URGEventBus.bus();
         prefManager = new PrefManager(context);
+        createHandlerThread();
 
         startAutoConnect();
         setScanTimer();
+    }
+
+    private void createHandlerThread() {
+//        handlerThread = new HandlerThread("nonUiThreadHandler");
+//        handlerThread.start();
+//        Looper looper = handlerThread.getLooper();
+//        handler = new Handler(looper);
+        handler = new Handler();
     }
 
     private Runnable scanTimerRunnable = new Runnable() {
@@ -137,7 +152,7 @@ public class URGConnection {
 
     private void saveMacAddress() {
         if(bleDevice != null && bleDevice.getMacAddress().length() > 0) {
-            prefManager.saveMacAddress(bleDevice.getMacAddress());
+            prefManager.setMacAddress(bleDevice.getMacAddress());
         }
     }
 
@@ -227,7 +242,11 @@ public class URGConnection {
         }
     }
 
-    public void scanAndConnect() {
+    public void scanAndConnect(boolean newDevice) {
+
+        if(newDevice)
+            forgetMacAddress();
+
         if (!bluetoothEnabled())
             return;
 
@@ -252,6 +271,10 @@ public class URGConnection {
                 .observeOn(AndroidSchedulers.mainThread())
                 .doFinally(this::dispose)
                 .subscribe(this::scanResult, this::onScanFailure);
+    }
+
+    private void forgetMacAddress() {
+        prefManager.setMacAddress("");
     }
 
     private void dispose() {
@@ -355,8 +378,8 @@ public class URGConnection {
             Integer rssi = bleDevices.get(device);
             String name = device.getName();
 
-            if(device.getAddress().equalsIgnoreCase(address)) {
-                Logger.log("getScanDevice: " + "existing device found: " + device.getAddress());
+            if(device.getAddress().equalsIgnoreCase(address) && !lookForNewDevice) {
+                Logger.log("-------------> getScanDevice: " + "existing device found: " + device.getAddress());
                 return device;
             } else if (rssi > maxRssi && name != null && name.toLowerCase().contains(DEVICE_SEARCH_STRING)) {
                 maxRssi = rssi;
@@ -365,7 +388,7 @@ public class URGConnection {
         }
 
         if (closestDevice != null)
-            Logger.log("closest device: " + (closestDevice != null ? closestDevice.getAddress() : "not found"));
+            Logger.log("-------------> closest device: " + (closestDevice != null ? closestDevice.getAddress() : "not found"));
 
         return closestDevice;
     }
@@ -386,7 +409,6 @@ public class URGConnection {
     private void sendSensorDisplayAngle(int angle) {
         if (angle < mSlouchAngle && ((angle - mStraightAngle) / mStraightRatio) <= numberOfStraightFrames) {
             int angelRange = (angle - mStraightAngle) / mStraightRatio;
-            Log.i("vy2110", "straight: " + mStraightAngle + " : ration: " + mStraightRatio + " : angle: " + angle + " : sned: " + angelRange);
 
             int sedValue = (angelRange > 0 && angelRange < 50) ? angelRange : 0;
             eventBus.send(new URGSensorEvent(sedValue, angle));
