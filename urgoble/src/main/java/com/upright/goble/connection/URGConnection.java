@@ -83,11 +83,10 @@ public class URGConnection {
     }
 
     private void createHandlerThread() {
-//        handlerThread = new HandlerThread("nonUiThreadHandler");
-//        handlerThread.start();
-//        Looper looper = handlerThread.getLooper();
-//        handler = new Handler(looper);
-        handler = new Handler();
+        handlerThread = new HandlerThread("nonUiThreadHandler");
+        handlerThread.start();
+        Looper looper = handlerThread.getLooper();
+        handler = new Handler(looper);
     }
 
     private Runnable scanTimerRunnable = new Runnable() {
