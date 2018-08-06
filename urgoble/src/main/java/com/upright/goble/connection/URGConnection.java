@@ -97,9 +97,7 @@ public class URGConnection {
             if(scanDisposable != null)
                     scanDisposable.dispose();
             BluetoothDevice device = getScanDevice(prefManager.getMacAddress());
-            if (device == null) {
-                eventBus.send(new URGScanEvent(null));
-            } else {
+            if (device != null) {
                 subscribeBleDevice(device.getAddress());
                 eventBus.send(new URGScanEvent(device.getAddress()));
                 bleConnect();
