@@ -7,6 +7,8 @@ import android.content.Context;
 import android.os.Handler;
 import android.os.HandlerThread;
 import android.os.Looper;
+import android.support.annotation.NonNull;
+import android.support.v4.util.Pair;
 import android.util.Log;
 
 import com.jakewharton.rx.ReplayingShare;
@@ -30,11 +32,18 @@ import java.nio.ByteBuffer;
 import java.util.Hashtable;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.TimeUnit;
 
 import io.reactivex.Observable;
+import io.reactivex.ObservableTransformer;
+import io.reactivex.Single;
 import io.reactivex.android.schedulers.AndroidSchedulers;
 import io.reactivex.disposables.Disposable;
+import io.reactivex.schedulers.Schedulers;
 import io.reactivex.subjects.PublishSubject;
+
+import static java.util.Arrays.asList;
+import static java.util.UUID.fromString;
 
 public class URGConnection {
 
@@ -43,6 +52,8 @@ public class URGConnection {
     private URGEventBus eventBus;
     private Observable<RxBleConnection> connectionObservable;
     private Disposable scanDisposable;
+    private Disposable otherDisposable;
+
     private PublishSubject<Boolean> disconnectTriggerSubject = PublishSubject.create();
 
     HandlerThread handlerThread;
@@ -52,12 +63,12 @@ public class URGConnection {
     boolean lookForNewDevice;
 
     // Demo/POC characteristics
-    UUID BATTERY_CHARACTERISTIC = UUID.fromString("0000AAA1-0000-1000-8000-00805f9b34fb");
-    UUID CALIB_CMD_UUID = UUID.fromString("0000aab1-0000-1000-8000-00805f9b34fb");
+    UUID BATTERY_CHARACTERISTIC = fromString("0000AAA1-0000-1000-8000-00805f9b34fb");
+    UUID CALIB_CMD_UUID = fromString("0000aab1-0000-1000-8000-00805f9b34fb");
     byte CALIB_COMMAND_STRAIGHT_CALIB_VALUE = 1;
-    UUID SENSOR_CHARACTERISTIC_UUID = UUID.fromString("0000aaca-0000-1000-8000-00805f9b34fb");
-    UUID CALIB_CHARACTERISTIC_UUID = UUID.fromString("0000aab3-0000-1000-8000-00805f9b34fb");
-    UUID CALIB_ACK_UUID = UUID.fromString("0000aab2-0000-1000-8000-00805f9b34fb");
+    UUID SENSOR_CHARACTERISTIC_UUID = fromString("0000aaca-0000-1000-8000-00805f9b34fb");
+    UUID CALIB_CHARACTERISTIC_UUID = fromString("0000aab3-0000-1000-8000-00805f9b34fb");
+    UUID CALIB_ACK_UUID = fromString("0000aab2-0000-1000-8000-00805f9b34fb");
 
     int mStraightAngle;
     int mSlouchAngle;
@@ -72,10 +83,25 @@ public class URGConnection {
     private static final String DEVICE_SEARCH_STRING = "upright";
     Hashtable<BluetoothDevice, Integer> bleDevices = new Hashtable<BluetoothDevice, Integer>();
 
-    public URGConnection(Context context) {
-        rxBleClient = RxBleClient.create(context);
+    private static URGConnection instance;
+
+    public URGEventBus getEventBus() {
+        return eventBus;
+    }
+
+    public static URGConnection init(Context context) {
+        if (instance == null) {
+            context = context.getApplicationContext();
+            instance = new URGConnection(context);
+        }
+        return instance;
+    }
+
+    private URGConnection(Context context) {
+
+        rxBleClient = RxBleClient.create(context.getApplicationContext());
         eventBus = URGEventBus.bus();
-        prefManager = new PrefManager(context);
+        prefManager = new PrefManager(context.getApplicationContext());
         createHandlerThread();
 
         startAutoConnect();
@@ -160,9 +186,10 @@ public class URGConnection {
         if (isConnected()) {
             triggerDisconnect();
         } else {
-            connectionObservable
+            otherDisposable = connectionObservable
                     .flatMapSingle(RxBleConnection::discoverServices)
                     .flatMapSingle(rxBleDeviceServices -> rxBleDeviceServices.getCharacteristic(BATTERY_CHARACTERISTIC))
+
                     .observeOn(AndroidSchedulers.mainThread())
                     .doOnSubscribe(disposable -> Logger.log("Connecting..."))
                     .subscribe(
@@ -181,7 +208,7 @@ public class URGConnection {
 
     public void readCalibration() {
         if (isConnected()) {
-            connectionObservable
+            otherDisposable = connectionObservable
                     .firstOrError()
                     .flatMap(rxBleConnection -> rxBleConnection.readCharacteristic(CALIB_CHARACTERISTIC_UUID))
                     .observeOn(AndroidSchedulers.mainThread())
@@ -196,8 +223,8 @@ public class URGConnection {
 
         if (isConnected()) {
             connectionObservable
-                    .firstOrError()
-                    .flatMap(rxBleConnection -> rxBleConnection.writeCharacteristic(CALIB_CMD_UUID, new byte[]{CALIB_COMMAND_STRAIGHT_CALIB_VALUE}))
+                .firstOrError()
+                .flatMap(rxBleConnection -> rxBleConnection.writeCharacteristic(CALIB_CMD_UUID, new byte[]{CALIB_COMMAND_STRAIGHT_CALIB_VALUE}))
                     .observeOn(AndroidSchedulers.mainThread())
                     .subscribe(
                             bytes -> onWriteSuccess(),
@@ -208,7 +235,7 @@ public class URGConnection {
 
     public void registerSensorNotifications() {
         if (isConnected()) {
-            connectionObservable
+            otherDisposable =  connectionObservable
                     .flatMap(rxBleConnection -> rxBleConnection.setupNotification(SENSOR_CHARACTERISTIC_UUID))
                     .doOnNext(notificationObservable -> Logger.log("Setting up sensor notification..."))
                     .flatMap(notificationObservable -> notificationObservable)
@@ -219,7 +246,7 @@ public class URGConnection {
 
     public void registerCalibrationDoneNotification() {
         if (isConnected()) {
-            connectionObservable
+            otherDisposable = connectionObservable
                     .flatMap(rxBleConnection -> rxBleConnection.setupNotification(CALIB_ACK_UUID))
                     .doOnNext(notificationObservable -> Logger.log("Setting up sensor notification..."))
                     .flatMap(notificationObservable -> notificationObservable)
@@ -287,11 +314,11 @@ public class URGConnection {
         bleDevices.put(device, scanResult.getRssi());
     }
 
-    private void onWriteFailure(Throwable throwable) {
+    public void onWriteFailure(Throwable throwable) {
         Logger.log("onWriteFailure: " + throwable);
     }
 
-    private void onWriteSuccess() {
+    public void onWriteSuccess() {
         eventBus.send(new URGWriteEvent());
         Logger.log("onWriteSuccess");
     }
@@ -333,7 +360,7 @@ public class URGConnection {
 
 //        int angle = BytesUtil.bytesToInt(bytes, 2);
 //        sendSensorDisplayAngle(angle);
-        connectionObservable
+        otherDisposable = connectionObservable
                 .flatMapSingle(RxBleConnection::discoverServices)
                 .flatMapSingle(rxBleDeviceServices -> rxBleDeviceServices.getCharacteristic(SENSOR_CHARACTERISTIC_UUID))
                 .observeOn(AndroidSchedulers.mainThread())
@@ -393,7 +420,7 @@ public class URGConnection {
     private void subscribeBleDevice(String macAddress) {
         bleDevice = rxBleClient.getBleDevice(macAddress);
         connectionObservable = prepareConnectionObservable();
-        bleDevice.observeConnectionStateChanges()
+        otherDisposable = bleDevice.observeConnectionStateChanges()
                 .observeOn(AndroidSchedulers.mainThread())
                 .subscribe(this::onConnectionStateChange);
     }
@@ -457,6 +484,11 @@ public class URGConnection {
 
         } else
             mSlouchRatio = 1;
+    }
+
+
+    public Observable<RxBleConnection> getConnectionObservable() {
+        return connectionObservable;
     }
 }
 

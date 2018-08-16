@@ -12,8 +12,11 @@ import android.widget.ImageView;
 import android.widget.TextView;
 
 import com.trello.rxlifecycle2.components.support.RxAppCompatActivity;
+import com.upright.goble.connection.URBlePower;
 import com.upright.goble.connection.URGConnection;
+import com.upright.goble.events.URGBatteryLevelEvent;
 import com.upright.goble.events.URGCalibEvent;
+import com.upright.goble.events.URGChargingStatusEvent;
 import com.upright.goble.events.URGConnEvent;
 import com.upright.goble.events.URGScanEvent;
 import com.upright.goble.events.URGSensorEvent;
@@ -37,6 +40,9 @@ public class ConnectionActivity extends RxAppCompatActivity {
     final static int BLUETOOTH_ENABLE_REQUEST_ID = 100;
 
     URGConnection connection;
+    URBlePower urBlePower;
+    @BindView(R.id.btn_turn_off) Button turnOffButton;
+    @BindView(R.id.btn_battery_value) Button batteryValue;
     @BindView(R.id.connectNew) Button connectNewButton;
     @BindView(R.id.connect) Button connectButton;
     @BindView(R.id.calibrate) Button calibrateButton;
@@ -45,6 +51,9 @@ public class ConnectionActivity extends RxAppCompatActivity {
     @BindView(R.id.sensorData) TextView sensorData;
     @BindView(R.id.calibrateData) TextView calibrateData;
     @BindView(R.id.scanData) TextView scanData;
+    @BindView(R.id.btn_charging_status) TextView btn_charging_status;
+    @BindView(R.id.charging_status) TextView charging_status;
+    @BindView(R.id.battery_status) TextView batteryStatus;
 
     boolean lookForNewDevice;
 
@@ -54,7 +63,8 @@ public class ConnectionActivity extends RxAppCompatActivity {
         setContentView(R.layout.activity_connection);
         ButterKnife.bind(this);
         enableDeviceButtons(false);
-        connection = new URGConnection(this);
+        connection = URGConnection.init(this);
+        urBlePower = new URBlePower(this);
         subscribeEvents();
     }
 
@@ -116,7 +126,18 @@ public class ConnectionActivity extends RxAppCompatActivity {
                 handleCalibUi(((URGCalibEvent) event).getState());
         } else if (event instanceof URGScanEvent) {
             handleScanUi(((URGScanEvent) event).getMacAddress());
+        }   else if (event instanceof URGChargingStatusEvent) {
+            chargingStatus(((URGChargingStatusEvent) event).getValue());
+        }  else if (event instanceof URGBatteryLevelEvent) {
+            currentBatteryValue(((URGBatteryLevelEvent) event).getValue());
         }
+    }
+
+    public void currentBatteryValue(int value){
+        batteryStatus.setText(String.valueOf(value));
+    }
+    public void chargingStatus(String chargingStatus){
+        charging_status.setText(chargingStatus);
     }
 
     private void handleCalibUi(int state) {
@@ -157,13 +178,9 @@ public class ConnectionActivity extends RxAppCompatActivity {
 
     private void handleSensorUi(int indexAngle, int sensorAngle) {
 
-        Runnable update = new Runnable() {
-            @Override
-            public void run() {
-                sensorMan.setImageResource(images_green[indexAngle]);
-                sensorData.setText(Integer.toString(indexAngle));
-            }
-
+        Runnable update = () -> {
+            sensorMan.setImageResource(images_green[indexAngle]);
+            sensorData.setText(Integer.toString(indexAngle));
         };
 
         Logger.log("handleSensorUi: " + sensorAngle + " | " + indexAngle);
@@ -225,4 +242,26 @@ public class ConnectionActivity extends RxAppCompatActivity {
     private void onBlueToothOk() {
         checkLocationPermission();
     }
+
+    //alex
+
+    @OnClick(R.id.btn_turn_off)
+    public void onTurnOffClick() {
+        urBlePower.turnOff();
+    }
+
+    @OnClick(R.id.btn_charging_status)
+    public void onChargingStatus() {
+        urBlePower.readChargingStatus();
+        urBlePower.registerChargingStatus();
+    }
+
+    @OnClick(R.id.btn_battery_value)
+    public void onBatteryRead() {
+        urBlePower.readBatteryValue();
+        urBlePower.registerOnBatteryValueChange();
+    }
+
+
+
 }

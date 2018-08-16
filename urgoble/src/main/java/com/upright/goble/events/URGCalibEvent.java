@@ -11,6 +11,14 @@ public class URGCalibEvent {
 
     int state;
 
+    public int getState() {
+        return state;
+    }
+
+    public void setState(int state) {
+        this.state = state;
+    }
+
     public URGCalibEvent(int state) {
         this.state = state;
     }
