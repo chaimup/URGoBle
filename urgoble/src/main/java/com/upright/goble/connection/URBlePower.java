@@ -4,6 +4,8 @@ import android.bluetooth.BluetoothGatt;
 import android.bluetooth.BluetoothGattCallback;
 import android.bluetooth.BluetoothGattCharacteristic;
 import android.content.Context;
+import android.os.Handler;
+import android.os.HandlerThread;
 import android.util.Log;
 
 import com.polidea.rxandroidble2.RxBleConnection;
@@ -25,10 +27,13 @@ public class URBlePower {
     }
 
     public static final UUID HALL_CONTROL_UUID = fromString("0000aaa4-0000-1000-8000-00805f9b34fb");
-    static final UUID BATTERY_CHARACTERISTIC = UUID.fromString("0000AAA1-0000-1000-8000-00805f9b34fb");
-
+    public static final UUID BATTERY_CHARACTERISTIC = UUID.fromString("0000AAA1-0000-1000-8000-00805f9b34fb");
+    public static final UUID TRACK_TRAIN_UUID = UUID.fromString("0000aac7-0000-1000-8000-00805f9b34fb");;
+    public static final UUID CHARGING_STATUS_UUID = UUID.fromString("0000aaa2-0000-1000-8000-00805f9b34fb");
 
     public static final byte    GO_SLEEP = 7;
+    public static final byte    NO_TRANSMISSION = 8;
+
     public void turnOff() {
         if(urgConnection.isConnected()){
             urgConnection.getConnectionObservable()
@@ -41,7 +46,6 @@ public class URBlePower {
                     );
         }
     }
-    public static final UUID    CHARGING_STATUS_UUID = UUID.fromString("0000aaa2-0000-1000-8000-00805f9b34fb");
 
     public void readChargingStatus()
     {
@@ -91,6 +95,34 @@ public class URBlePower {
                     .flatMap(notificationObservable -> notificationObservable)
                     .observeOn(AndroidSchedulers.mainThread())
                     .subscribe(this::onReadBatterySuccess, this::onReadFailure);
+        }
+    }
+
+    public void onSwitchTrainingTracking(boolean autoSwitch)
+    {
+        if(urgConnection.isConnected()){
+            urgConnection.getConnectionObservable()
+                    .firstOrError()
+                    .flatMap(bleConnection -> bleConnection.writeCharacteristic(TRACK_TRAIN_UUID, new byte[]{(byte) (autoSwitch ? 1 : 0)}))
+                    .observeOn(AndroidSchedulers.mainThread())
+                    .subscribe(
+                            bytes -> urgConnection.onWriteSuccess(),
+                            urgConnection::onWriteFailure
+                    );
+        }
+    }
+
+    public void airplaneMode()
+    {
+        if(urgConnection.isConnected()){
+            urgConnection.getConnectionObservable()
+                    .firstOrError()
+                    .flatMap(bleConnection -> bleConnection.writeCharacteristic(HALL_CONTROL_UUID, new byte[]{NO_TRANSMISSION}))
+                    .observeOn(AndroidSchedulers.mainThread())
+                    .subscribe(
+                            bytes -> urgConnection.onWriteSuccess(),
+                            urgConnection::onWriteFailure
+                    );
         }
     }
 

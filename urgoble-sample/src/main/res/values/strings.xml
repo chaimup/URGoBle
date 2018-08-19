@@ -1,3 +1,6 @@
 <resources>
     <string name="app_name">URBleGOsample</string>
+    <string name="settings_vibration_1">GENTLE</string>
+    <string name="settings_vibration_2">MEDIUM</string>
+    <string name="settings_vibration_3">STRONG</string>
 </resources>

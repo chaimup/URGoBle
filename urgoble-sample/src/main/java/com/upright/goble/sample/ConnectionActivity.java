@@ -5,14 +5,19 @@ import android.bluetooth.BluetoothAdapter;
 import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.os.Bundle;
+import android.os.Handler;
 import android.support.v4.app.ActivityCompat;
 import android.support.v4.content.ContextCompat;
+import android.view.View;
 import android.widget.Button;
+import android.widget.EditText;
 import android.widget.ImageView;
+import android.widget.SeekBar;
 import android.widget.TextView;
 
 import com.trello.rxlifecycle2.components.support.RxAppCompatActivity;
 import com.upright.goble.connection.URBlePower;
+import com.upright.goble.connection.URVibration;
 import com.upright.goble.connection.URGConnection;
 import com.upright.goble.events.URGBatteryLevelEvent;
 import com.upright.goble.events.URGCalibEvent;
@@ -21,11 +26,17 @@ import com.upright.goble.events.URGConnEvent;
 import com.upright.goble.events.URGScanEvent;
 import com.upright.goble.events.URGSensorEvent;
 import com.upright.goble.utils.Logger;
+import com.upright.goble.utils.VibrationUtils;
 
 import butterknife.BindView;
 import butterknife.ButterKnife;
 import butterknife.OnClick;
 import io.reactivex.functions.Consumer;
+
+import static com.upright.goble.utils.VibrationUtils.UPRIGHT_VERSION_1_1_9;
+import static com.upright.goble.utils.VibrationUtils.VIBRATION_GENTLE_ID;
+import static com.upright.goble.utils.VibrationUtils.VIBRATION_MEDIUM_ID;
+import static com.upright.goble.utils.VibrationUtils.VIBRATION_STRONG_OLD;
 
 
 public class ConnectionActivity extends RxAppCompatActivity {
@@ -41,19 +52,47 @@ public class ConnectionActivity extends RxAppCompatActivity {
 
     URGConnection connection;
     URBlePower urBlePower;
-    @BindView(R.id.btn_turn_off) Button turnOffButton;
-    @BindView(R.id.btn_battery_value) Button batteryValue;
-    @BindView(R.id.connectNew) Button connectNewButton;
-    @BindView(R.id.connect) Button connectButton;
-    @BindView(R.id.calibrate) Button calibrateButton;
-    @BindView(R.id.connectStatus) ImageView connectImage;
-    @BindView(R.id.sensorMan) ImageView sensorMan;
-    @BindView(R.id.sensorData) TextView sensorData;
-    @BindView(R.id.calibrateData) TextView calibrateData;
-    @BindView(R.id.scanData) TextView scanData;
-    @BindView(R.id.btn_charging_status) TextView btn_charging_status;
-    @BindView(R.id.charging_status) TextView charging_status;
-    @BindView(R.id.battery_status) TextView batteryStatus;
+    URVibration urVibration;
+    VibrationUtils vibrationUtils;
+
+    @BindView(R.id.btn_airplane_mode)
+    Button airplaneMode;
+    @BindView(R.id.btn_training_tracking)
+    Button trainingTracking;
+    @BindView(R.id.btn_turn_off)
+    Button turnOffButton;
+    @BindView(R.id.btn_battery_value)
+    Button batteryValue;
+    @BindView(R.id.btn_delay_periods)
+    Button delayPeriods;
+    @BindView(R.id.connectNew)
+    Button connectNewButton;
+    @BindView(R.id.connect)
+    Button connectButton;
+    @BindView(R.id.calibrate)
+    Button calibrateButton;
+    @BindView(R.id.connectStatus)
+    ImageView connectImage;
+    @BindView(R.id.sensorMan)
+    ImageView sensorMan;
+    @BindView(R.id.sensorData)
+    TextView sensorData;
+    @BindView(R.id.calibrateData)
+    TextView calibrateData;
+    @BindView(R.id.scanData)
+    TextView scanData;
+    @BindView(R.id.btn_charging_status)
+    TextView btn_charging_status;
+    @BindView(R.id.charging_status)
+    TextView charging_status;
+    @BindView(R.id.battery_status)
+    TextView batteryStatus;
+    @BindView(R.id.periods)
+    EditText periods;
+    @BindView(R.id.delay)
+    EditText delay;
+    @BindView(R.id.seekBar)
+    SeekBar seekBar;
 
     boolean lookForNewDevice;
 
@@ -65,7 +104,12 @@ public class ConnectionActivity extends RxAppCompatActivity {
         enableDeviceButtons(false);
         connection = URGConnection.init(this);
         urBlePower = new URBlePower(this);
+        urVibration = new URVibration(this);
+        vibrationUtils = new VibrationUtils(urVibration);
         subscribeEvents();
+
+        seekBar.setMax(2);
+        setStrength();
     }
 
     @Override
@@ -123,26 +167,27 @@ public class ConnectionActivity extends RxAppCompatActivity {
         } else if (event instanceof URGSensorEvent) {
             handleSensorUi(((URGSensorEvent) event).getIndexAngle(), ((URGSensorEvent) event).getSensorAngle());
         } else if (event instanceof URGCalibEvent) {
-                handleCalibUi(((URGCalibEvent) event).getState());
+            handleCalibUi(((URGCalibEvent) event).getState());
         } else if (event instanceof URGScanEvent) {
             handleScanUi(((URGScanEvent) event).getMacAddress());
-        }   else if (event instanceof URGChargingStatusEvent) {
+        } else if (event instanceof URGChargingStatusEvent) {
             chargingStatus(((URGChargingStatusEvent) event).getValue());
-        }  else if (event instanceof URGBatteryLevelEvent) {
+        } else if (event instanceof URGBatteryLevelEvent) {
             currentBatteryValue(((URGBatteryLevelEvent) event).getValue());
         }
     }
 
-    public void currentBatteryValue(int value){
+    public void currentBatteryValue(int value) {
         batteryStatus.setText(String.valueOf(value));
     }
-    public void chargingStatus(String chargingStatus){
+
+    public void chargingStatus(String chargingStatus) {
         charging_status.setText(chargingStatus);
     }
 
     private void handleCalibUi(int state) {
         calibrateData.setText(state == URGCalibEvent.CALIB_FINISHED ? "ok" : (state == URGCalibEvent.CALIB_STARTED) ? "wait" : "error");
-        if(state == URGCalibEvent.CALIB_STARTED) {
+        if (state == URGCalibEvent.CALIB_STARTED) {
             resetSensorMan();
         }
     }
@@ -153,7 +198,7 @@ public class ConnectionActivity extends RxAppCompatActivity {
     }
 
     private void handleConnectionUi(URGConnEvent.State state) {
-        switch(state) {
+        switch (state) {
             case Connected:
                 connectImage.setBackgroundColor(ContextCompat.getColor(this, R.color.colorGreenLight));
                 enableDeviceButtons(true);
@@ -175,7 +220,6 @@ public class ConnectionActivity extends RxAppCompatActivity {
     }
 
 
-
     private void handleSensorUi(int indexAngle, int sensorAngle) {
 
         Runnable update = () -> {
@@ -188,8 +232,8 @@ public class ConnectionActivity extends RxAppCompatActivity {
     }
 
     private void clearUiData() {
-         calibrateData.setText("");
-         sensorData.setText("");
+        calibrateData.setText("");
+        sensorData.setText("");
     }
 
     private void enableDeviceButtons(boolean enable) {
@@ -218,15 +262,14 @@ public class ConnectionActivity extends RxAppCompatActivity {
         }
     }
 
-    public void enableBluetoothAndLocation()
-    {
-       if(URGConnection.bluetoothEnabled()) {
-           onBlueToothOk();
-       } else {
-           Intent enableBtIntent = new Intent(BluetoothAdapter.ACTION_REQUEST_ENABLE);
-           startActivityForResult(enableBtIntent, BLUETOOTH_ENABLE_REQUEST_ID);
-       }
-     }
+    public void enableBluetoothAndLocation() {
+        if (URGConnection.bluetoothEnabled()) {
+            onBlueToothOk();
+        } else {
+            Intent enableBtIntent = new Intent(BluetoothAdapter.ACTION_REQUEST_ENABLE);
+            startActivityForResult(enableBtIntent, BLUETOOTH_ENABLE_REQUEST_ID);
+        }
+    }
 
     @Override
     protected void onActivityResult(int requestCode, int resultCode, Intent data) {
@@ -260,6 +303,94 @@ public class ConnectionActivity extends RxAppCompatActivity {
     public void onBatteryRead() {
         urBlePower.readBatteryValue();
         urBlePower.registerOnBatteryValueChange();
+    }
+
+    @OnClick(R.id.btn_delay_periods)
+    public void delayPeriods() {
+        urVibration.vibrationDelayAndPeriods(Integer.valueOf(delay.getText().toString()), Integer.valueOf(periods.getText().toString()));
+    }
+
+    @OnClick(R.id.btn_training_tracking)
+    public void setTrainingTracking() {
+        if (trainingTracking.getText().toString().equalsIgnoreCase("Training")) {
+            urBlePower.onSwitchTrainingTracking(true);
+            trainingTracking.setText("Tracking");
+        } else {
+            urBlePower.onSwitchTrainingTracking(false);
+            trainingTracking.setText("Training");
+        }
+    }
+
+    @OnClick(R.id.btn_airplane_mode)
+    public void setAirplaneMode() {
+       urBlePower.airplaneMode();
+    }
+
+    int strength = 0;
+    int pattern = 0;
+    public void setStrength() {
+
+        seekBar.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
+
+            public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) {
+            }
+
+            public void onStartTrackingTouch(SeekBar seekBar) {
+            }
+
+            public void onStopTrackingTouch(SeekBar seekBar) {
+                strength = getVibrationStrengthId(seekBar);
+                vibrationUtils.prepareParameters(pattern, strength);
+
+            }
+        });
+
+    }
+
+    private int getVibrationStrengthId(SeekBar seekBar) {
+        int vibrationStrength = 0;
+
+        switch(seekBar.getProgress()) {
+            case 0:
+                vibrationStrength = VIBRATION_GENTLE_ID;
+                break;
+
+            case 1:
+                vibrationStrength = VIBRATION_MEDIUM_ID;
+                break;
+
+            case 2:
+                vibrationStrength = VIBRATION_STRONG_OLD;
+                break;
+        }
+
+        return vibrationStrength;
+    }
+
+    public void onPatternClick(View view){
+        switch (view.getId()){
+            case R.id.btn_short:
+                vibrationUtils.prepareParameters(0, strength);
+                pattern = 0;
+                break;
+            case R.id.btn_medium:
+                vibrationUtils.prepareParameters(1, strength);
+                pattern = 1;
+                break;
+            case R.id.btn_long:
+                vibrationUtils.prepareParameters(2, strength);
+                pattern = 2;
+                break;
+            case R.id.btn_knock:
+                vibrationUtils.prepareParameters(3, strength);
+                pattern = 3;
+                break;
+            case R.id.btn_rampup:
+                vibrationUtils.prepareParameters(4, strength);
+                pattern = 4;
+                break;
+
+        }
     }
 
 
