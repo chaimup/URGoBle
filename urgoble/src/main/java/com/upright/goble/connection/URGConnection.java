@@ -2,6 +2,8 @@ package com.upright.goble.connection;
 
 import android.bluetooth.BluetoothAdapter;
 import android.bluetooth.BluetoothDevice;
+import android.bluetooth.BluetoothGatt;
+import android.bluetooth.BluetoothGattCallback;
 import android.bluetooth.BluetoothGattCharacteristic;
 import android.content.Context;
 import android.os.Handler;
@@ -69,6 +71,7 @@ public class URGConnection {
     UUID SENSOR_CHARACTERISTIC_UUID = fromString("0000aaca-0000-1000-8000-00805f9b34fb");
     UUID CALIB_CHARACTERISTIC_UUID = fromString("0000aab3-0000-1000-8000-00805f9b34fb");
     UUID CALIB_ACK_UUID = fromString("0000aab2-0000-1000-8000-00805f9b34fb");
+    UUID POSTURE_SCORE_UUID = UUID.fromString("0000aac4-0000-1000-8000-00805f9b34fb");
 
     int mStraightAngle;
     int mSlouchAngle;
@@ -136,6 +139,7 @@ public class URGConnection {
     }
 
     private void stopAutoConnect() {
+
         handler.removeCallbacks(autoConnectRunnable);
     }
 
@@ -154,7 +158,6 @@ public class URGConnection {
             }
         }
     };
-
 
     private void setScanTimer() {
         handler.postDelayed(scanTimerRunnable, 3000);
@@ -204,6 +207,7 @@ public class URGConnection {
     }
 
     private void onConnectionFailure(Throwable throwable) {
+        
     }
 
     public void readCalibration() {
@@ -220,9 +224,10 @@ public class URGConnection {
     }
 
     public void calibrate() {
-
         if (isConnected()) {
-            connectionObservable
+            if(scanDisposable != null)
+                scanDisposable.dispose();
+            otherDisposable = connectionObservable
                 .firstOrError()
                 .flatMap(rxBleConnection -> rxBleConnection.writeCharacteristic(CALIB_CMD_UUID, new byte[]{CALIB_COMMAND_STRAIGHT_CALIB_VALUE}))
                     .observeOn(AndroidSchedulers.mainThread())
@@ -315,7 +320,8 @@ public class URGConnection {
     }
 
     public void onWriteFailure(Throwable throwable) {
-        Logger.log("onWriteFailure: " + throwable);
+        Log.d("Fail connection", "onWriteFailure: "  + throwable.getMessage());
+        Logger.log("URGConnection onWriteFailure: " + throwable);
     }
 
     public void onWriteSuccess() {
@@ -338,7 +344,6 @@ public class URGConnection {
     public boolean isConnected() {
         return bleDevice != null && bleDevice.getConnectionState() == RxBleConnection.RxBleConnectionState.CONNECTED;
     }
-
     public RxBleDevice getBleDevice() {
         return bleDevice;
     }
@@ -489,6 +494,46 @@ public class URGConnection {
 
     public Observable<RxBleConnection> getConnectionObservable() {
         return connectionObservable;
+    }
+
+    public void destroy() {
+        if(scanDisposable != null)
+            scanDisposable.dispose();
+        handler.removeCallbacks(scanTimerRunnable);
+        bleDevice = null;
+        eventBus = null;
+        connectionObservable = null;
+
+    }
+
+    public void readPostureValue()
+    {
+        if (isConnected()) {
+            otherDisposable = connectionObservable
+                    .firstOrError()
+                    .flatMap(rxBleConnection -> rxBleConnection.readCharacteristic(POSTURE_SCORE_UUID))
+                    .observeOn(AndroidSchedulers.mainThread())
+                    .subscribe(bytes -> {
+                        postureValueChange(bytes);
+                    }, this::onReadFailure);
+        }
+
+    }
+
+    private void postureValueChange(byte[] bytes) {
+    }
+
+    public void readCalibAckValue()
+    {
+        if (isConnected()) {
+            otherDisposable = connectionObservable
+                    .firstOrError()
+                    .flatMap(rxBleConnection -> rxBleConnection.readCharacteristic(CALIB_ACK_UUID))
+                    .observeOn(AndroidSchedulers.mainThread())
+                    .subscribe(bytes -> {
+                        postureValueChange(bytes);
+                    }, this::onReadFailure);
+        }
     }
 }
 

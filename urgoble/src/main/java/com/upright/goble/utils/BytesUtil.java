@@ -20,6 +20,8 @@ public class BytesUtil {
         return new String(hexChars);
     }
 
+//
+
     public static byte[] hexToBytes(String hexRepresentation) {
         if (hexRepresentation.length() % 2 == 1) {
             throw new IllegalArgumentException("hexToBytes requires an even-length String parameter");

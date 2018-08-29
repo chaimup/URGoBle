@@ -16,13 +16,17 @@ import android.widget.SeekBar;
 import android.widget.TextView;
 
 import com.trello.rxlifecycle2.components.support.RxAppCompatActivity;
+import com.upright.goble.connection.Characteristic;
+import com.upright.goble.connection.URBleBase;
 import com.upright.goble.connection.URBlePower;
+import com.upright.goble.connection.URMain;
 import com.upright.goble.connection.URVibration;
 import com.upright.goble.connection.URGConnection;
 import com.upright.goble.events.URGBatteryLevelEvent;
 import com.upright.goble.events.URGCalibEvent;
 import com.upright.goble.events.URGChargingStatusEvent;
 import com.upright.goble.events.URGConnEvent;
+import com.upright.goble.events.URGDeviceInfoEvent;
 import com.upright.goble.events.URGScanEvent;
 import com.upright.goble.events.URGSensorEvent;
 import com.upright.goble.utils.Logger;
@@ -52,6 +56,7 @@ public class ConnectionActivity extends RxAppCompatActivity {
 
     URGConnection connection;
     URBlePower urBlePower;
+    URBleBase urBleBase;
     URVibration urVibration;
     VibrationUtils vibrationUtils;
 
@@ -71,6 +76,9 @@ public class ConnectionActivity extends RxAppCompatActivity {
     Button connectButton;
     @BindView(R.id.calibrate)
     Button calibrateButton;
+    @BindView(R.id.btn_device_and_firmware)
+    Button deviceAndFirmware;
+
     @BindView(R.id.connectStatus)
     ImageView connectImage;
     @BindView(R.id.sensorMan)
@@ -91,6 +99,8 @@ public class ConnectionActivity extends RxAppCompatActivity {
     EditText periods;
     @BindView(R.id.delay)
     EditText delay;
+    @BindView(R.id.device_version)
+    TextView deviceVersion;
     @BindView(R.id.seekBar)
     SeekBar seekBar;
 
@@ -103,8 +113,10 @@ public class ConnectionActivity extends RxAppCompatActivity {
         ButterKnife.bind(this);
         enableDeviceButtons(false);
         connection = URGConnection.init(this);
-        urBlePower = new URBlePower(this);
-        urVibration = new URVibration(this);
+        Characteristic characteristic = new URMain(getApplicationContext());
+        urBlePower = new URBlePower(this, characteristic);
+        urBleBase = new URBleBase(this, characteristic);
+        urVibration = new URVibration(this, characteristic);
         vibrationUtils = new VibrationUtils(urVibration);
         subscribeEvents();
 
@@ -174,7 +186,13 @@ public class ConnectionActivity extends RxAppCompatActivity {
             chargingStatus(((URGChargingStatusEvent) event).getValue());
         } else if (event instanceof URGBatteryLevelEvent) {
             currentBatteryValue(((URGBatteryLevelEvent) event).getValue());
+        } else if (event instanceof URGDeviceInfoEvent) {
+            getDeviceInfo(((URGDeviceInfoEvent) event).getValue());
         }
+    }
+
+    public void getDeviceInfo(String value) {
+        deviceVersion.setText(value);
     }
 
     public void currentBatteryValue(int value) {
@@ -307,16 +325,19 @@ public class ConnectionActivity extends RxAppCompatActivity {
 
     @OnClick(R.id.btn_delay_periods)
     public void delayPeriods() {
-        urVibration.vibrationDelayAndPeriods(Integer.valueOf(delay.getText().toString()), Integer.valueOf(periods.getText().toString()));
+        if(!delay.getText().toString().equalsIgnoreCase("") && !periods.getText().toString().equalsIgnoreCase("") )
+            urVibration.vibrationDelayAndPeriods(Integer.valueOf(delay.getText().toString()), Integer.valueOf(periods.getText().toString()));
+        urVibration.readVibrationDelay();
+        urVibration.readIsAutoSwitchTracking();
     }
 
     @OnClick(R.id.btn_training_tracking)
     public void setTrainingTracking() {
         if (trainingTracking.getText().toString().equalsIgnoreCase("Training")) {
-            urBlePower.onSwitchTrainingTracking(true);
+            urBleBase.onSwitchTrainingTracking(true);
             trainingTracking.setText("Tracking");
         } else {
-            urBlePower.onSwitchTrainingTracking(false);
+            urBleBase.onSwitchTrainingTracking(false);
             trainingTracking.setText("Training");
         }
     }
@@ -324,6 +345,11 @@ public class ConnectionActivity extends RxAppCompatActivity {
     @OnClick(R.id.btn_airplane_mode)
     public void setAirplaneMode() {
        urBlePower.airplaneMode();
+    }
+
+    @OnClick(R.id.btn_device_and_firmware)
+    public void getInfoAboutDevice() {
+        urBleBase.readDeviceVersion();
     }
 
     int strength = 0;
@@ -393,6 +419,13 @@ public class ConnectionActivity extends RxAppCompatActivity {
         }
     }
 
+    @Override
+    protected void onDestroy() {
+        handleConnect();
+        connection.triggerDisconnect();
+        enableBluetoothAndLocation();
+        connection.destroy();
+        super.onDestroy();
 
-
+    }
 }
