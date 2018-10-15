@@ -1,6 +1,5 @@
 package com.upright.goble.events;
 
-import com.upright.goble.connection.URGConnection;
 import lombok.Data;
 
 @Data

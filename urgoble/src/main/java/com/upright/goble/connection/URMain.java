@@ -1,8 +1,8 @@
 package com.upright.goble.connection;
 
-import android.bluetooth.BluetoothGattCharacteristic;
 import android.content.Context;
 
+import com.upright.goble.connection.oldBle.URGConnection;
 import com.upright.goble.events.URGBatteryLevelEvent;
 import com.upright.goble.events.URGChargingStatusEvent;
 import com.upright.goble.events.URGDeviceInfoEvent;
@@ -30,9 +30,12 @@ public class URMain implements Characteristic{
     public static final int DATA_SYNC_READ = 9;
     public static final int DATA_SYNC_NOTIFICATION = 10;
     public static final int DATA_ONLINE_NOTIFICATION = 11;
+    public static final int RANGE_READ = 12;
     //NEW UPRIGHT 2.0
-    public static final int POWER_ERROR_CODE_READ = 12;
-    public static final int DEVICE_MODEL_READ = 13;
+    public static final int POWER_ERROR_CODE_READ = 13;
+    public static final int DEVICE_MODEL_READ = 14;
+    public static final int TRAINING_STATUS_READ = 15;
+    public static final int VIBRATION_STRENGTH_READ = 16;
 
     URGConnection urgConnection;
 
@@ -77,6 +80,19 @@ public class URMain implements Characteristic{
                     .observeOn(AndroidSchedulers.mainThread())
                     .subscribe(characteristic -> {
                        onReadSuccess(characteristic,callbackValue);
+                    }, this::onReadFailure);
+        }
+    }
+
+    @Override
+    public void readCharacteristic(UUID uuid, byte[] bytesNumber, int callbackValue) {
+        if(urgConnection.isConnected()){
+            urgConnection.getConnectionObservable()
+                    .firstOrError()
+                    .flatMap(rxBleConnection -> rxBleConnection.readCharacteristic(uuid))
+                    .observeOn(AndroidSchedulers.mainThread())
+                    .subscribe(characteristic -> {
+                        onReadSuccess(characteristic,callbackValue);
                     }, this::onReadFailure);
         }
     }

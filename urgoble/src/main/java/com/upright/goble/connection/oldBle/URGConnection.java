@@ -1,16 +1,12 @@
-package com.upright.goble.connection;
+package com.upright.goble.connection.oldBle;
 
 import android.bluetooth.BluetoothAdapter;
 import android.bluetooth.BluetoothDevice;
-import android.bluetooth.BluetoothGatt;
-import android.bluetooth.BluetoothGattCallback;
 import android.bluetooth.BluetoothGattCharacteristic;
 import android.content.Context;
 import android.os.Handler;
 import android.os.HandlerThread;
 import android.os.Looper;
-import android.support.annotation.NonNull;
-import android.support.v4.util.Pair;
 import android.util.Log;
 
 import com.jakewharton.rx.ReplayingShare;
@@ -34,17 +30,12 @@ import java.nio.ByteBuffer;
 import java.util.Hashtable;
 import java.util.Set;
 import java.util.UUID;
-import java.util.concurrent.TimeUnit;
 
 import io.reactivex.Observable;
-import io.reactivex.ObservableTransformer;
-import io.reactivex.Single;
 import io.reactivex.android.schedulers.AndroidSchedulers;
 import io.reactivex.disposables.Disposable;
-import io.reactivex.schedulers.Schedulers;
 import io.reactivex.subjects.PublishSubject;
 
-import static java.util.Arrays.asList;
 import static java.util.UUID.fromString;
 
 public class URGConnection {

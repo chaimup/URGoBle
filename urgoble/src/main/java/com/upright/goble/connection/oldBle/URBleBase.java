@@ -1,6 +1,8 @@
-package com.upright.goble.connection;
+package com.upright.goble.connection.oldBle;
 
 import android.content.Context;
+
+import com.upright.goble.connection.Characteristic;
 
 import java.io.UnsupportedEncodingException;
 import java.util.UUID;
@@ -11,8 +13,8 @@ import static com.upright.goble.connection.URMain.SYSTEM_INFO_READ;
 
 public class URBleBase {
 
-    URGConnection urgConnection;
-    Characteristic characteristic;
+    public URGConnection urgConnection;
+    public Characteristic characteristic;
 
     public static final UUID FIRMWAREUPDATE_INFO_VERSION_UUID = UUID.fromString("00002a26-0000-1000-8000-00805f9b34fb");
     public static final UUID HARDWARE_REVISION_UUID = UUID.fromString("00002a27-0000-1000-8000-00805f9b34fb");

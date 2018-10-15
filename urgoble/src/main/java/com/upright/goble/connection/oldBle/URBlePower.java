@@ -1,6 +1,8 @@
-package com.upright.goble.connection;
+package com.upright.goble.connection.oldBle;
 
 import android.content.Context;
+
+import com.upright.goble.connection.Characteristic;
 
 import java.util.UUID;
 
@@ -10,8 +12,8 @@ import static java.util.UUID.fromString;
 
 public class URBlePower{
 
-    URGConnection urgConnection;
-    Characteristic characteristic;
+    public URGConnection urgConnection;
+    public Characteristic characteristic;
 
     public URBlePower(Context context, Characteristic characteristic) {
         urgConnection = URGConnection.init(context);

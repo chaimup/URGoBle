@@ -1,6 +1,9 @@
-package com.upright.goble.connection;
+package com.upright.goble.connection.newBle;
 
 import android.content.Context;
+
+import com.upright.goble.connection.Characteristic;
+import com.upright.goble.connection.oldBle.URBlePower;
 
 import java.util.UUID;
 import static com.upright.goble.connection.URMain.POWER_ERROR_CODE_READ;

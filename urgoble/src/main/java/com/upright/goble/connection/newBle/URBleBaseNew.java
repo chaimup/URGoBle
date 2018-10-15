@@ -1,6 +1,9 @@
-package com.upright.goble.connection;
+package com.upright.goble.connection.newBle;
 
 import android.content.Context;
+
+import com.upright.goble.connection.Characteristic;
+import com.upright.goble.connection.oldBle.URBleBase;
 
 import java.util.UUID;
 
@@ -12,7 +15,6 @@ public class URBleBaseNew extends URBleBase {
 
     public static final UUID DEVICE_MODEL_UUID = UUID.fromString("00002a24-0000-1000-8000-00805f9b34fb");
     public static final UUID SYSTEM_INFO_UUID = UUID.fromString("00002a25-0000-1000-8000-00805f9b34fb");
-    public static final UUID FIRMWAREUPDATE_INFO_VERSION_UUID = UUID.fromString("00002a26-0000-1000-8000-00805f9b34fb");
 
     public URBleBaseNew(Context context, Characteristic characteristic) {
         super(context, characteristic);

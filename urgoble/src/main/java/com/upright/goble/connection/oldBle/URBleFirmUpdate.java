@@ -1,4 +1,4 @@
-package com.upright.goble.connection;
+package com.upright.goble.connection.oldBle;
 
 import android.content.Context;
 import android.util.Log;

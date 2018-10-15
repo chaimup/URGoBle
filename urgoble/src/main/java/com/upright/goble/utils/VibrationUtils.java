@@ -1,6 +1,6 @@
 package com.upright.goble.utils;
 
-import com.upright.goble.connection.URVibration;
+import com.upright.goble.connection.oldBle.URVibration;
 
 public class VibrationUtils {
 

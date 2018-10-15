@@ -1,6 +1,8 @@
-package com.upright.goble.connection;
+package com.upright.goble.connection.oldBle;
 
 import android.content.Context;
+
+import com.upright.goble.connection.Characteristic;
 
 import java.util.UUID;
 
